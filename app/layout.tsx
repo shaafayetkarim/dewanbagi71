@@ -16,12 +16,12 @@ export const metadata: Metadata = {
   description: "Generate blog content with AI",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   const defaultOpen = cookieStore.get("sidebar:state")?.value === "true"
 
   return (

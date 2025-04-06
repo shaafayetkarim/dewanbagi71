@@ -5,147 +5,158 @@ import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, PenTool } from "lucide-react"
+import { User, Mail, Lock, Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { MotionDiv, fadeIn, slideUp } from "@/components/ui/motion"
+import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function SignupPage() {
   const router = useRouter()
-  const [showPassword, setShowPassword] = useState(false)
+  const { toast } = useToast()
+  const { signup, loading } = useAuth()
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!name || !email || !password || !confirmPassword) {
+      toast({
+        title: "Missing fields",
+        description: "Please fill in all fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (password !== confirmPassword) {
+      toast({
+        title: "Passwords do not match",
+        description: "Please make sure your passwords match",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
 
-    // Simulate signup - replace with actual registration
-    setTimeout(() => {
+    try {
+      await signup(name, email, password)
+      toast({
+        title: "Account created",
+        description: "Your account has been created successfully",
+      })
+    } catch (error: any) {
+      toast({
+        title: "Signup failed",
+        description: error.message || "Something went wrong",
+        variant: "destructive",
+      })
+    } finally {
       setIsLoading(false)
-      router.push("/dashboard")
-    }, 1000)
+    }
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b bg-background py-6">
-        <div className="container mx-auto flex items-center justify-between px-4 md:px-8">
-          <Link href="/" className="flex items-center gap-2">
-            <PenTool className="h-6 w-6" />
-            <span className="text-xl font-bold">BlogAI</span>
-          </Link>
-          <div>
-            <span className="text-sm text-muted-foreground">
+    <div className="container flex h-screen items-center justify-center">
+      <Card className="mx-auto w-full max-w-md">
+        <CardHeader className="space-y-1 text-center">
+          <CardTitle className="text-3xl font-bold">Create an account</CardTitle>
+          <CardDescription>Enter your information to create an account</CardDescription>
+        </CardHeader>
+        <form onSubmit={handleSignup}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <div className="flex">
+                <span className="flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-muted-foreground">
+                  <User className="h-4 w-4" />
+                </span>
+                <Input
+                  id="name"
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="rounded-l-none"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="flex">
+                <span className="flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-muted-foreground">
+                  <Mail className="h-4 w-4" />
+                </span>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="rounded-l-none"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="flex">
+                <span className="flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-muted-foreground">
+                  <Lock className="h-4 w-4" />
+                </span>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="rounded-l-none"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <div className="flex">
+                <span className="flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-muted-foreground">
+                  <Lock className="h-4 w-4" />
+                </span>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="rounded-l-none"
+                />
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col space-y-4">
+            <Button type="submit" className="w-full" disabled={isLoading || loading}>
+              {isLoading || loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                "Create account"
+              )}
+            </Button>
+            <div className="text-center text-sm">
               Already have an account?{" "}
-              <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
-                Log in
+              <Link href="/login" className="text-primary hover:underline">
+                Login
               </Link>
-            </span>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex flex-1 items-center justify-center px-4 py-12 sm:px-6 md:px-8">
-        <MotionDiv initial="hidden" animate="visible" variants={slideUp} className="w-full max-w-md">
-          <Card className="border-none shadow-lg sm:border">
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-center text-2xl font-bold">Create an account</CardTitle>
-              <CardDescription className="text-center">Enter your information to create an account</CardDescription>
-            </CardHeader>
-            <form onSubmit={handleSubmit}>
-              <CardContent className="space-y-4">
-                <MotionDiv variants={fadeIn} transition={{ delay: 0.1 }} className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="John Doe"
-                    required
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary/50"
-                  />
-                </MotionDiv>
-                <MotionDiv variants={fadeIn} transition={{ delay: 0.2 }} className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="name@example.com"
-                    required
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary/50"
-                  />
-                </MotionDiv>
-                <MotionDiv variants={fadeIn} transition={{ delay: 0.3 }} className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      required
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary/50"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-0 top-0 hover:bg-transparent"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Password must be at least 8 characters long</p>
-                </MotionDiv>
-              </CardContent>
-              <CardFooter className="flex flex-col space-y-4">
-                <MotionDiv variants={fadeIn} transition={{ delay: 0.4 }} className="w-full">
-                  <Button
-                    type="submit"
-                    className="w-full transition-all duration-300 hover:shadow-md"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Creating account..." : "Create account"}
-                  </Button>
-                </MotionDiv>
-                <MotionDiv variants={fadeIn} transition={{ delay: 0.5 }} className="text-center text-sm">
-                  Already have an account?{" "}
-                  <Link
-                    href="/login"
-                    className="text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
-                  >
-                    Login
-                  </Link>
-                </MotionDiv>
-                <MotionDiv
-                  variants={fadeIn}
-                  transition={{ delay: 0.6 }}
-                  className="text-center text-xs text-muted-foreground"
-                >
-                  By creating an account, you agree to our{" "}
-                  <Link href="#" className="underline underline-offset-4 hover:text-muted-foreground/80">
-                    Terms of Service
-                  </Link>{" "}
-                  and{" "}
-                  <Link href="#" className="underline underline-offset-4 hover:text-muted-foreground/80">
-                    Privacy Policy
-                  </Link>
-                </MotionDiv>
-              </CardFooter>
-            </form>
-          </Card>
-        </MotionDiv>
-      </div>
-
-      <footer className="border-t bg-background py-6">
-        <div className="container mx-auto px-4 text-center md:px-8">
-          <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} BlogAI. All rights reserved.
-          </p>
-        </div>
-      </footer>
+            </div>
+          </CardFooter>
+        </form>
+      </Card>
     </div>
   )
 }

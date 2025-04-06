@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { SearchIcon, Filter, FileText, Calendar, Tag, Edit } from "lucide-react"
 
@@ -14,76 +14,133 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { useToast } from "@/hooks/use-toast"
+import { MotionDiv } from "@/components/ui/motion"
+
+type Post = {
+  id: string
+  title: string
+  excerpt: string | null
+  status: string
+  createdAt: string
+  tags?: string[]
+}
 
 export default function SearchPage() {
+  const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
+  const [searchResults, setSearchResults] = useState<Post[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [allTags, setAllTags] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
 
-  // Mock data - in a real app, this would come from an API
-  const searchResults = [
-    {
-      id: 1,
-      title: "Getting Started with Next.js",
-      excerpt: "Learn how to build modern web applications with Next.js, the React framework for production.",
-      status: "Published",
-      date: "2023-05-15",
-      tags: ["Next.js", "React", "Web Development"],
-    },
-    {
-      id: 2,
-      title: "Understanding TypeScript for Beginners",
-      excerpt: "A comprehensive guide to TypeScript fundamentals for JavaScript developers.",
-      status: "Draft",
-      date: "2023-05-10",
-      tags: ["TypeScript", "JavaScript", "Programming"],
-    },
-    {
-      id: 3,
-      title: "The Future of AI in Content Creation",
-      excerpt: "Exploring how artificial intelligence is transforming the way we create and consume content.",
-      status: "Published",
-      date: "2023-05-05",
-      tags: ["AI", "Content Creation", "Technology"],
-    },
-    {
-      id: 4,
-      title: "10 SEO Tips for Better Blog Performance",
-      excerpt: "Practical SEO strategies to improve your blog's visibility and drive more organic traffic.",
-      status: "Draft",
-      date: "2023-05-01",
-      tags: ["SEO", "Marketing", "Blogging"],
-    },
-  ]
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        setIsLoading(true)
+        const res = await fetch("/api/posts")
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch posts")
+        }
+
+        const data = await res.json()
+        setSearchResults(data.posts)
+
+        // Extract unique tags from posts
+        const tags = data.posts.flatMap((post: Post) => post.tags || [])
+        setAllTags(Array.from(new Set(tags)))
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to load posts",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchPosts()
+  }, [toast])
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    try {
+      setIsLoading(true)
+
+      // Build query parameters
+      const params = new URLSearchParams()
+      if (searchQuery) params.append("query", searchQuery)
+      if (statusFilter !== "all") params.append("status", statusFilter)
+      if (selectedTags.length > 0) params.append("tags", selectedTags.join(","))
+
+      // Add date filter
+      if (dateFilter === "last-week") {
+        const lastWeek = new Date()
+        lastWeek.setDate(lastWeek.getDate() - 7)
+        params.append("from", lastWeek.toISOString())
+      } else if (dateFilter === "last-month") {
+        const lastMonth = new Date()
+        lastMonth.setMonth(lastMonth.getMonth() - 1)
+        params.append("from", lastMonth.toISOString())
+      }
+
+      const res = await fetch(`/api/posts?${params.toString()}`)
+
+      if (!res.ok) {
+        throw new Error("Failed to search posts")
+      }
+
+      const data = await res.json()
+      setSearchResults(data.posts)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to search posts",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
+  }
+
+  const resetFilters = () => {
+    setStatusFilter("all")
+    setDateFilter("all")
+    setSelectedTags([])
+  }
 
   // Filter search results based on filters
   const filteredResults = searchResults.filter((result) => {
     const matchesSearch =
       searchQuery === "" ||
       result.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      result.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      result.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+      (result.excerpt && result.excerpt.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (result.tags && result.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase())))
 
     const matchesStatus =
       statusFilter === "all" ||
-      (statusFilter === "published" && result.status === "Published") ||
-      (statusFilter === "draft" && result.status === "Draft")
+      (statusFilter === "published" && result.status === "published") ||
+      (statusFilter === "draft" && result.status === "draft")
 
     const matchesDate =
       dateFilter === "all" ||
-      (dateFilter === "last-week" && new Date(result.date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) ||
-      (dateFilter === "last-month" && new Date(result.date) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+      (dateFilter === "last-week" && new Date(result.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) ||
+      (dateFilter === "last-month" && new Date(result.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
 
-    return matchesSearch && matchesStatus && matchesDate
+    const matchesTags =
+      selectedTags.length === 0 || (result.tags && selectedTags.every((tag) => result.tags!.includes(tag)))
+
+    return matchesSearch && matchesStatus && matchesDate && matchesTags
   })
-
-  // Available tags for filtering
-  const allTags = Array.from(new Set(searchResults.flatMap((result) => result.tags)))
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    // In a real app, this would trigger an API call with the search query
-  }
 
   return (
     <div className="container mx-auto p-6">
@@ -144,7 +201,11 @@ export default function SearchPage() {
                 <div className="space-y-2">
                   {allTags.map((tag) => (
                     <div key={tag} className="flex items-center space-x-2">
-                      <Checkbox id={`tag-${tag}`} />
+                      <Checkbox
+                        id={`tag-${tag}`}
+                        checked={selectedTags.includes(tag)}
+                        onCheckedChange={() => toggleTag(tag)}
+                      />
                       <Label htmlFor={`tag-${tag}`}>{tag}</Label>
                     </div>
                   ))}
@@ -169,8 +230,10 @@ export default function SearchPage() {
                 </div>
 
                 <div className="mt-6 flex justify-end gap-2">
-                  <Button variant="outline">Reset</Button>
-                  <Button>Apply Filters</Button>
+                  <Button variant="outline" onClick={resetFilters}>
+                    Reset
+                  </Button>
+                  <Button onClick={handleSearch}>Apply Filters</Button>
                 </div>
               </div>
             </SheetContent>
@@ -178,7 +241,22 @@ export default function SearchPage() {
         </div>
       </div>
 
-      {filteredResults.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-4">
+          {Array(4)
+            .fill(0)
+            .map((_, i) => (
+              <Card key={i} className="h-[200px] animate-pulse bg-muted">
+                <CardContent className="p-4">
+                  <div className="h-4 w-3/4 rounded bg-muted-foreground/20"></div>
+                  <div className="mt-2 h-4 w-1/2 rounded bg-muted-foreground/20"></div>
+                  <div className="mt-4 h-20 w-full rounded bg-muted-foreground/20"></div>
+                  <div className="mt-4 h-8 w-full rounded bg-muted-foreground/20"></div>
+                </CardContent>
+              </Card>
+            ))}
+        </div>
+      ) : filteredResults.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center p-6">
             <p className="mb-4 text-center text-muted-foreground">No results found matching your criteria</p>
@@ -190,44 +268,54 @@ export default function SearchPage() {
       ) : (
         <div className="space-y-4">
           {filteredResults.map((result) => (
-            <Card key={result.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-xl">{result.title}</CardTitle>
-                    <CardDescription className="mt-1 flex items-center gap-2">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(result.date).toLocaleDateString()}
-                      <FileText className="ml-2 h-3 w-3" />
-                      {result.status}
-                    </CardDescription>
+            <MotionDiv
+              key={result.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              whileHover={{ y: -5, transition: { duration: 0.2 } }}
+            >
+              <Card>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-xl">{result.title}</CardTitle>
+                      <CardDescription className="mt-1 flex items-center gap-2">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(result.createdAt).toLocaleDateString()}
+                        <FileText className="ml-2 h-3 w-3" />
+                        {result.status === "published" ? "Published" : "Draft"}
+                      </CardDescription>
+                    </div>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/editor/${result.id}`}>
+                        <Edit className="mr-2 h-4 w-4" /> Edit
+                      </Link>
+                    </Button>
                   </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/editor/${result.id}`}>
-                      <Edit className="mr-2 h-4 w-4" /> Edit
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">{result.excerpt}</p>
+                  {result.tags && result.tags.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {result.tags.map((tag) => (
+                        <div key={tag} className="flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs">
+                          <Tag className="mr-1 h-3 w-3" />
+                          {tag}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter>
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link href={result.status === "published" ? `/preview/${result.id}` : `/editor/${result.id}`}>
+                      {result.status === "published" ? "View Post" : "Continue Editing"}
                     </Link>
                   </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">{result.excerpt}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {result.tags.map((tag) => (
-                    <div key={tag} className="flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs">
-                      <Tag className="mr-1 h-3 w-3" />
-                      {tag}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline" className="w-full" asChild>
-                  <Link href={result.status === "Published" ? `/preview/${result.id}` : `/editor/${result.id}`}>
-                    {result.status === "Published" ? "View Post" : "Continue Editing"}
-                  </Link>
-                </Button>
-              </CardFooter>
-            </Card>
+                </CardFooter>
+              </Card>
+            </MotionDiv>
           ))}
         </div>
       )}

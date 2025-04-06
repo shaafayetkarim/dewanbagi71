@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Edit, Trash2, Eye, FolderPlus } from "lucide-react"
 
@@ -22,63 +22,89 @@ import {
 } from "@/components/ui/alert-dialog"
 import { MotionDiv, MotionCard, cardHover, fadeIn, slideUp, staggerContainer } from "@/components/ui/motion"
 
+type Post = {
+  id: string
+  title: string
+  excerpt: string
+  status: string
+  createdAt: string
+  wordCount: number
+  tags?: string[]
+}
+
 export default function DraftsPage() {
   const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [drafts, setDrafts] = useState<Post[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Mock data - in a real app, this would come from an API
-  const drafts = [
-    {
-      id: 1,
-      title: "Getting Started with Next.js",
-      excerpt: "Learn how to build modern web applications with Next.js, the React framework for production.",
-      status: "Needs Editing",
-      date: "2023-05-15",
-      wordCount: 850,
-    },
-    {
-      id: 2,
-      title: "Understanding TypeScript for Beginners",
-      excerpt: "A comprehensive guide to TypeScript fundamentals for JavaScript developers.",
-      status: "Ready to Publish",
-      date: "2023-05-10",
-      wordCount: 1200,
-    },
-    {
-      id: 3,
-      title: "The Future of AI in Content Creation",
-      excerpt: "Exploring how artificial intelligence is transforming the way we create and consume content.",
-      status: "Incomplete",
-      date: "2023-05-05",
-      wordCount: 450,
-    },
-    {
-      id: 4,
-      title: "10 SEO Tips for Better Blog Performance",
-      excerpt: "Practical SEO strategies to improve your blog's visibility and drive more organic traffic.",
-      status: "Ready to Publish",
-      date: "2023-05-01",
-      wordCount: 950,
-    },
-  ]
+  useEffect(() => {
+    const fetchDrafts = async () => {
+      try {
+        setIsLoading(true)
+        const res = await fetch("/api/posts?status=draft")
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch drafts")
+        }
+
+        const data = await res.json()
+        setDrafts(data.posts)
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to load drafts",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchDrafts()
+  }, [toast])
 
   // Filter drafts based on search query and status filter
   const filteredDrafts = drafts.filter((draft) => {
     const matchesSearch =
+      searchQuery === "" ||
       draft.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      draft.excerpt.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || draft.status === statusFilter
+      (draft.excerpt && draft.excerpt.toLowerCase().includes(searchQuery.toLowerCase()))
+
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "published" && draft.status === "published") ||
+      (statusFilter === "draft" && draft.status === "draft") ||
+      (statusFilter === "incomplete" && draft.wordCount < 300)
 
     return matchesSearch && matchesStatus
   })
 
-  const handleDeleteDraft = (id: number) => {
-    // In a real app, this would call an API to delete the draft
-    toast({
-      title: "Draft deleted",
-      description: "The draft has been permanently deleted",
-    })
+  const handleDeleteDraft = async (id: string) => {
+    try {
+      const res = await fetch(`/api/posts/${id}`, {
+        method: "DELETE",
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to delete draft")
+      }
+
+      // Remove the deleted draft from state
+      setDrafts(drafts.filter((draft) => draft.id !== id))
+
+      toast({
+        title: "Draft deleted",
+        description: "The draft has been permanently deleted",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete draft",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -106,14 +132,33 @@ export default function DraftsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Ready to Publish">Ready to Publish</SelectItem>
-            <SelectItem value="Needs Editing">Needs Editing</SelectItem>
-            <SelectItem value="Incomplete">Incomplete</SelectItem>
+            <SelectItem value="published">Ready to Publish</SelectItem>
+            <SelectItem value="draft">Needs Editing</SelectItem>
+            <SelectItem value="incomplete">Incomplete</SelectItem>
           </SelectContent>
         </Select>
       </MotionDiv>
 
-      {filteredDrafts.length === 0 ? (
+      {isLoading ? (
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {Array(6)
+            .fill(0)
+            .map((_, i) => (
+              <Card key={i} className="h-[250px] animate-pulse bg-muted">
+                <CardContent className="p-4">
+                  <div className="h-4 w-3/4 rounded bg-muted-foreground/20"></div>
+                  <div className="mt-2 h-4 w-1/2 rounded bg-muted-foreground/20"></div>
+                  <div className="mt-4 h-20 w-full rounded bg-muted-foreground/20"></div>
+                  <div className="mt-4 flex gap-2">
+                    <div className="h-8 w-1/3 rounded bg-muted-foreground/20"></div>
+                    <div className="h-8 w-1/3 rounded bg-muted-foreground/20"></div>
+                    <div className="h-8 w-1/3 rounded bg-muted-foreground/20"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+        </div>
+      ) : filteredDrafts.length === 0 ? (
         <MotionDiv variants={fadeIn} transition={{ delay: 0.2 }}>
           <Card className="border-none shadow-md">
             <CardContent className="flex flex-col items-center justify-center p-6">
@@ -141,19 +186,19 @@ export default function DraftsPage() {
                   <div>
                     <CardTitle className="line-clamp-2">{draft.title}</CardTitle>
                     <CardDescription className="mt-1">
-                      {new Date(draft.date).toLocaleDateString()} • {draft.wordCount} words
+                      {new Date(draft.createdAt).toLocaleDateString()} • {draft.wordCount} words
                     </CardDescription>
                   </div>
                   <span
                     className={`rounded-full px-2 py-1 text-xs ${
-                      draft.status === "Ready to Publish"
+                      draft.status === "published"
                         ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200"
-                        : draft.status === "Needs Editing"
+                        : draft.status === "draft"
                           ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
                           : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
                     }`}
                   >
-                    {draft.status}
+                    {draft.status === "published" ? "Published" : "Draft"}
                   </span>
                 </div>
                 <p className="line-clamp-2 text-sm text-muted-foreground">{draft.excerpt}</p>
